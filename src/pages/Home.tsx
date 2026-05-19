@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Page } from 'konsta/react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, MessageCircle, ChevronLeft } from 'lucide-react';
+import { MessageCircle, ChevronLeft, ShoppingCart } from 'lucide-react';
 import { useMenu } from '../context/MenuContext.tsx';
 import BottomNav from '../components/BottomNav.tsx';
 import { useCart } from '../context/CartContext.tsx';
@@ -178,13 +178,14 @@ export default function Home() {
                       <h3 className="font-bold text-gray-900 text-sm leading-tight mb-1">{item.name}</h3>
                       <p className="text-xs text-gray-400 line-clamp-2">{item.description}</p>
                     </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="font-bold text-primary text-sm">S/ {item.price.toFixed(2)}</span>
+                    <div className="mt-3 flex items-center justify-between gap-1.5">
+                      <span className="font-extrabold text-primary text-sm whitespace-nowrap">S/ {item.price.toFixed(2)}</span>
                       <button
                         onClick={(e) => handleAddToCart(e, item)}
-                        className="bg-primary text-white p-1.5 rounded-full hover:scale-110 active:scale-95 transition-transform cursor-pointer border-0 flex items-center justify-center"
+                        className="bg-primary text-white text-[10px] font-black px-2.5 py-1.5 rounded-full flex items-center gap-1 hover:scale-[1.05] active:scale-95 transition-all shadow-sm cursor-pointer border-0 whitespace-nowrap flex-shrink-0"
                       >
-                        <Plus className="w-4 h-4" />
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Añadir</span>
                       </button>
                     </div>
                   </div>
