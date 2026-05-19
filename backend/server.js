@@ -174,6 +174,20 @@ app.delete('/api/categories/:id', requireAuth, (req, res) => {
   });
 });
 
+app.put('/api/categories/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { name, image } = req.body;
+  if (!name || !image) {
+    return res.status(400).json({ error: 'Nombre e imagen son requeridos' });
+  }
+  db.run('UPDATE categories SET name = ?, image = ? WHERE id = ?', [name, image, id], function(err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ id, name, image });
+  });
+});
+
 // --- MENU ITEMS ENDPOINTS ---
 app.get('/api/menu', (req, res) => {
   db.all('SELECT * FROM menu_items', [], (err, rows) => {
@@ -209,6 +223,21 @@ app.delete('/api/menu/:id', requireAuth, (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     res.json({ message: 'Plato eliminado con éxito', deletedId: id });
+  });
+});
+
+app.put('/api/menu/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { name, price, image, category } = req.body;
+  if (!name || price === undefined || !image || !category) {
+    return res.status(400).json({ error: 'Campos inválidos' });
+  }
+  db.run('UPDATE menu_items SET name = ?, price = ?, image = ?, category = ? WHERE id = ?',
+    [name, parseFloat(price), image, category, id], function(err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ id, name, description: '', price: parseFloat(price), image, category });
   });
 });
 

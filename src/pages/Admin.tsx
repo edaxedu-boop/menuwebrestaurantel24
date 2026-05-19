@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenu } from '../context/MenuContext';
-import { ArrowLeft, Eye, EyeOff, Plus, Trash2, LogOut, Coffee, Tag, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Plus, Trash2, LogOut, Coffee, Tag, DollarSign, ChevronDown, ChevronUp, Edit } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://restaurantel24.duckdns.org/api';
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { categories, menuItems, addCategory, deleteCategory, addMenuItem, deleteMenuItem } = useMenu();
+  const { categories, menuItems, addCategory, deleteCategory, updateCategory, addMenuItem, deleteMenuItem, updateMenuItem } = useMenu();
 
   // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -23,6 +23,8 @@ export default function Admin() {
   const [categoryFile, setCategoryFile] = useState<File | null>(null);
   const [categoryFilePreview, setCategoryFilePreview] = useState<string>('');
   const [categorySuccess, setCategorySuccess] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [existingCategoryImageUrl, setExistingCategoryImageUrl] = useState<string>('');
 
   // Product form states
   const [productName, setProductName] = useState('');
@@ -31,6 +33,8 @@ export default function Admin() {
   const [productFilePreview, setProductFilePreview] = useState<string>('');
   const [productCategory, setProductCategory] = useState('');
   const [productSuccess, setProductSuccess] = useState('');
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [existingProductImageUrl, setExistingProductImageUrl] = useState<string>('');
 
   // Accordion state
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
@@ -110,31 +114,51 @@ export default function Admin() {
     return data.imageUrl;
   };
 
-  const handleAddCategory = async (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!categoryName.trim() || !categoryFile) {
-      alert('Por favor rellena todos los campos e ingresa una imagen para la categoría.');
+    if (!categoryName.trim()) {
+      alert('Por favor rellena todos los campos.');
       return;
     }
     try {
-      const uploadedUrl = await uploadImage(categoryFile);
-      const success = await addCategory(categoryName, uploadedUrl);
-      if (success) {
-        setCategoryName('');
-        setCategoryFile(null);
-        setCategoryFilePreview('');
-        setCategorySuccess('¡Categoría agregada con éxito!');
-        setTimeout(() => setCategorySuccess(''), 3000);
+      let uploadedUrl = existingCategoryImageUrl;
+      if (categoryFile) {
+        uploadedUrl = await uploadImage(categoryFile);
+      } else if (!editingCategoryId) {
+        alert('Por favor selecciona una imagen para la categoría.');
+        return;
+      }
+
+      if (editingCategoryId) {
+        const success = await updateCategory(editingCategoryId, categoryName, uploadedUrl);
+        if (success) {
+          setCategoryName('');
+          setCategoryFile(null);
+          setCategoryFilePreview('');
+          setEditingCategoryId(null);
+          setExistingCategoryImageUrl('');
+          setCategorySuccess('¡Categoría actualizada con éxito!');
+          setTimeout(() => setCategorySuccess(''), 3000);
+        }
+      } else {
+        const success = await addCategory(categoryName, uploadedUrl);
+        if (success) {
+          setCategoryName('');
+          setCategoryFile(null);
+          setCategoryFilePreview('');
+          setCategorySuccess('¡Categoría agregada con éxito!');
+          setTimeout(() => setCategorySuccess(''), 3000);
+        }
       }
     } catch (err: any) {
-      alert(err.message || 'Error al subir imagen o agregar categoría.');
+      alert(err.message || 'Error al guardar categoría.');
     }
   };
 
-  const handleAddProduct = async (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productName.trim() || !productPrice || !productFile || !productCategory) {
-      alert('Por favor rellena todos los campos e ingresa una imagen para el plato.');
+    if (!productName.trim() || !productPrice || !productCategory) {
+      alert('Por favor rellena todos los campos.');
       return;
     }
     const priceNum = parseFloat(productPrice);
@@ -143,19 +167,41 @@ export default function Admin() {
       return;
     }
     try {
-      const uploadedUrl = await uploadImage(productFile);
-      const success = await addMenuItem(productName, priceNum, uploadedUrl, productCategory);
-      if (success) {
-        setExpandedCategories(prev => ({ ...prev, [productCategory]: true }));
-        setProductName('');
-        setProductPrice('');
-        setProductFile(null);
-        setProductFilePreview('');
-        setProductSuccess('¡Plato agregado con éxito!');
-        setTimeout(() => setProductSuccess(''), 3000);
+      let uploadedUrl = existingProductImageUrl;
+      if (productFile) {
+        uploadedUrl = await uploadImage(productFile);
+      } else if (!editingProductId) {
+        alert('Por favor selecciona una imagen para el plato.');
+        return;
+      }
+
+      if (editingProductId) {
+        const success = await updateMenuItem(editingProductId, productName, priceNum, uploadedUrl, productCategory);
+        if (success) {
+          setExpandedCategories(prev => ({ ...prev, [productCategory]: true }));
+          setProductName('');
+          setProductPrice('');
+          setProductFile(null);
+          setProductFilePreview('');
+          setEditingProductId(null);
+          setExistingProductImageUrl('');
+          setProductSuccess('¡Plato actualizado con éxito!');
+          setTimeout(() => setProductSuccess(''), 3000);
+        }
+      } else {
+        const success = await addMenuItem(productName, priceNum, uploadedUrl, productCategory);
+        if (success) {
+          setExpandedCategories(prev => ({ ...prev, [productCategory]: true }));
+          setProductName('');
+          setProductPrice('');
+          setProductFile(null);
+          setProductFilePreview('');
+          setProductSuccess('¡Plato agregado con éxito!');
+          setTimeout(() => setProductSuccess(''), 3000);
+        }
       }
     } catch (err: any) {
-      alert(err.message || 'Error al subir imagen o agregar plato.');
+      alert(err.message || 'Error al guardar plato.');
     }
   };
 
@@ -308,8 +354,8 @@ export default function Admin() {
             {activeTab === 'categories' ? (
               <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl shadow-slate-100/60 sticky top-24">
                 <h3 className="text-xl font-black mb-5 flex items-center gap-2 text-slate-900">
-                  <Plus className="w-5 h-5 text-primary" />
-                  <span>Añadir Categoría</span>
+                  {editingCategoryId ? <Edit className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
+                  <span>{editingCategoryId ? 'Modificar Categoría' : 'Añadir Categoría'}</span>
                 </h3>
 
                 {categorySuccess && (
@@ -318,7 +364,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                <form onSubmit={handleAddCategory} className="space-y-4">
+                <form onSubmit={handleSaveCategory} className="space-y-4">
                   <div>
                     <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">Nombre de la Categoría</label>
                     <input
@@ -332,12 +378,14 @@ export default function Admin() {
                   </div>
 
                   <div>
-                    <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">Imagen de la Categoría</label>
+                    <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">
+                      Imagen de la Categoría {editingCategoryId && <span className="text-[9px] text-slate-400 font-normal capitalize">(opcional para mantener actual)</span>}
+                    </label>
                     <div className="relative flex flex-col gap-3">
                       <input
                         type="file"
                         accept="image/*"
-                        required
+                        required={!editingCategoryId}
                         onChange={handleCategoryFileChange}
                         className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all file:mr-4 file:py-1.5 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                       />
@@ -349,19 +397,36 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full bg-primary hover:bg-primary/95 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-primary/10 transition-all text-sm tracking-wide"
-                  >
-                    Guardar Categoría
-                  </button>
+                  <div className="flex gap-2.5 pt-2">
+                    {editingCategoryId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCategoryId(null);
+                          setCategoryName('');
+                          setCategoryFile(null);
+                          setCategoryFilePreview('');
+                          setExistingCategoryImageUrl('');
+                        }}
+                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all text-sm tracking-wide border-0 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="flex-1 bg-primary hover:bg-primary/95 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-primary/10 transition-all text-sm tracking-wide border-0 cursor-pointer"
+                    >
+                      {editingCategoryId ? 'Guardar' : 'Guardar Categoría'}
+                    </button>
+                  </div>
                 </form>
               </div>
             ) : (
               <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl shadow-slate-100/60 sticky top-24">
                 <h3 className="text-xl font-black mb-5 flex items-center gap-2 text-slate-900">
-                  <Plus className="w-5 h-5 text-primary" />
-                  <span>Añadir Plato</span>
+                  {editingProductId ? <Edit className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
+                  <span>{editingProductId ? 'Modificar Plato' : 'Añadir Plato'}</span>
                 </h3>
 
                 {productSuccess && (
@@ -370,7 +435,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                <form onSubmit={handleAddProduct} className="space-y-4">
+                <form onSubmit={handleSaveProduct} className="space-y-4">
                   <div>
                     <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">Nombre del Plato</label>
                     <input
@@ -418,12 +483,14 @@ export default function Admin() {
                   </div>
 
                   <div>
-                    <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">Imagen del Plato</label>
+                    <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">
+                      Imagen del Plato {editingProductId && <span className="text-[9px] text-slate-400 font-normal capitalize">(opcional para mantener actual)</span>}
+                    </label>
                     <div className="relative flex flex-col gap-3">
                       <input
                         type="file"
                         accept="image/*"
-                        required
+                        required={!editingProductId}
                         onChange={handleProductFileChange}
                         className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all file:mr-4 file:py-1.5 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                       />
@@ -435,12 +502,30 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full bg-primary hover:bg-primary/95 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-primary/10 transition-all text-sm tracking-wide"
-                  >
-                    Guardar Plato
-                  </button>
+                  <div className="flex gap-2.5 pt-2">
+                    {editingProductId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProductId(null);
+                          setProductName('');
+                          setProductPrice('');
+                          setProductFile(null);
+                          setProductFilePreview('');
+                          setExistingProductImageUrl('');
+                        }}
+                        className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all text-sm tracking-wide border-0 cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="flex-1 bg-primary hover:bg-primary/95 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-primary/10 transition-all text-sm tracking-wide border-0 cursor-pointer"
+                    >
+                      {editingProductId ? 'Guardar' : 'Guardar Plato'}
+                    </button>
+                  </div>
                 </form>
               </div>
             )}
@@ -479,17 +564,32 @@ export default function Admin() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          if (confirm(`¿Estás seguro de eliminar la categoría "${cat.name}"?`)) {
-                            deleteCategory(cat.id);
-                          }
-                        }}
-                        className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition-all duration-200"
-                        title="Eliminar categoría"
-                      >
-                        <Trash2 className="w-4.5 h-4.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            setEditingCategoryId(cat.id);
+                            setCategoryName(cat.name);
+                            setExistingCategoryImageUrl(cat.image);
+                            setCategoryFilePreview(cat.image);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="text-slate-400 hover:text-primary hover:bg-slate-100 p-2 rounded-xl transition-all duration-200 border-0 bg-transparent cursor-pointer"
+                          title="Editar categoría"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Estás seguro de eliminar la categoría "${cat.name}"?`)) {
+                              deleteCategory(cat.id);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition-all duration-200 border-0 bg-transparent cursor-pointer"
+                          title="Eliminar categoría"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -560,17 +660,34 @@ export default function Admin() {
                                     </div>
                                   </div>
 
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(`¿Estás seguro de eliminar el plato "${item.name}"?`)) {
-                                        deleteMenuItem(item.id);
-                                      }
-                                    }}
-                                    className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition-all duration-200 border-0 bg-transparent cursor-pointer"
-                                    title="Eliminar plato"
-                                  >
-                                    <Trash2 className="w-4.5 h-4.5" />
-                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => {
+                                        setEditingProductId(item.id);
+                                        setProductName(item.name);
+                                        setProductPrice(item.price.toString());
+                                        setProductCategory(item.category);
+                                        setExistingProductImageUrl(item.image);
+                                        setProductFilePreview(item.image);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                      }}
+                                      className="text-slate-400 hover:text-primary hover:bg-slate-100 p-2 rounded-xl transition-all duration-200 border-0 bg-transparent cursor-pointer"
+                                      title="Editar plato"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`¿Estás seguro de eliminar el plato "${item.name}"?`)) {
+                                          deleteMenuItem(item.id);
+                                        }
+                                      }}
+                                      className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-2 rounded-xl transition-all duration-200 border-0 bg-transparent cursor-pointer"
+                                      title="Eliminar plato"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                             </div>

@@ -8,8 +8,10 @@ interface MenuContextType {
   menuItems: MenuItem[];
   addCategory: (name: string, image: string) => Promise<boolean>;
   deleteCategory: (id: string) => Promise<boolean>;
+  updateCategory: (id: string, name: string, image: string) => Promise<boolean>;
   addMenuItem: (name: string, price: number, image: string, category: string) => Promise<boolean>;
   deleteMenuItem: (id: string) => Promise<boolean>;
+  updateMenuItem: (id: string, name: string, price: number, image: string, category: string) => Promise<boolean>;
   refreshMenu: () => Promise<void>;
 }
 
@@ -97,6 +99,31 @@ export const MenuProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateCategory = async (id: string, name: string, image: string): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('el24_admin_token');
+      const res = await fetch(`${API_URL}/categories/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, image })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Error al actualizar categoría');
+      }
+
+      setCategories(prev => prev.map(c => c.id === id ? { id, name, image } : c));
+      return true;
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión o permisos con el servidor de base de datos.');
+      return false;
+    }
+  };
+
   const addMenuItem = async (name: string, price: number, image: string, category: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem('el24_admin_token');
@@ -146,8 +173,34 @@ export const MenuProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateMenuItem = async (id: string, name: string, price: number, image: string, category: string): Promise<boolean> => {
+    try {
+      const token = localStorage.getItem('el24_admin_token');
+      const res = await fetch(`${API_URL}/menu/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, price, image, category })
+      });
+
+      if (!res.ok) {
+        throw new Error('Error al actualizar plato');
+      }
+
+      const updatedItem = await res.json();
+      setMenuItems(prev => prev.map(item => item.id === id ? updatedItem : item));
+      return true;
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión o permisos con el servidor de base de datos.');
+      return false;
+    }
+  };
+
   return (
-    <MenuContext.Provider value={{ categories, menuItems, addCategory, deleteCategory, addMenuItem, deleteMenuItem, refreshMenu }}>
+    <MenuContext.Provider value={{ categories, menuItems, addCategory, deleteCategory, updateCategory, addMenuItem, deleteMenuItem, updateMenuItem, refreshMenu }}>
       {children}
     </MenuContext.Provider>
   );
