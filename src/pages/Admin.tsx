@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMenu } from '../context/MenuContext';
 import { ArrowLeft, Eye, EyeOff, Plus, Trash2, LogOut, Coffee, Tag, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://restaurantel24.duckdns.org/api';
+
 export default function Admin() {
   const navigate = useNavigate();
   const { categories, menuItems, addCategory, deleteCategory, addMenuItem, deleteMenuItem } = useMenu();
@@ -46,7 +48,7 @@ export default function Admin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('https://restaurantel24.duckdns.org/api/auth/login', {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -93,7 +95,7 @@ export default function Admin() {
     const formData = new FormData();
     formData.append('image', file);
     const token = localStorage.getItem('el24_admin_token');
-    const res = await fetch('https://restaurantel24.duckdns.org/api/upload', {
+    const res = await fetch(`${API_BASE}/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`

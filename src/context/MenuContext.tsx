@@ -15,7 +15,7 @@ interface MenuContextType {
 
 const MenuContext = createContext<MenuContextType | undefined>(undefined);
 
-const API_URL = 'https://restaurantel24.duckdns.org/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://restaurantel24.duckdns.org/api';
 
 export const MenuProvider = ({ children }: { children: ReactNode }) => {
   const [categories, setCategories] = useState<Category[]>(defaultCategories);
