@@ -24,16 +24,19 @@ const AnimatedRoutes = () => {
 
 import { CartProvider } from './context/CartContext.tsx';
 import { MenuProvider } from './context/MenuContext.tsx';
+import { PrinterProvider } from './context/PrinterContext.tsx';
 
 function App() {
   return (
     <MenuProvider>
       <CartProvider>
-        <KonstaApp theme="ios" safeAreas>
-          <BrowserRouter>
-            <AnimatedRoutes />
-          </BrowserRouter>
-        </KonstaApp>
+        <PrinterProvider>
+          <KonstaApp theme="ios" safeAreas>
+            <BrowserRouter>
+              <AnimatedRoutes />
+            </BrowserRouter>
+          </KonstaApp>
+        </PrinterProvider>
       </CartProvider>
     </MenuProvider>
   );

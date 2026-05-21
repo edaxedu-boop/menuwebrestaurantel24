@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenu } from '../context/MenuContext';
+import { usePrinter } from '../context/PrinterContext.tsx';
 import { ArrowLeft, Eye, EyeOff, Plus, Trash2, LogOut, Coffee, Tag, DollarSign, ChevronDown, ChevronUp, Edit, Printer } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://restaurantel24.duckdns.org/api';
@@ -49,16 +50,15 @@ export default function Admin() {
   // Tab state
   const [activeTab, setActiveTab] = useState<'categories' | 'products' | 'printer'>('products');
 
-  // Printer configuration states
-  const [printerType, setPrinterType] = useState(() => {
-    return localStorage.getItem('el24_printer_type') || 'system';
-  });
-  const [bluetoothDeviceName, setBluetoothDeviceName] = useState(() => {
-    return localStorage.getItem('el24_printer_name') || '';
-  });
-  const [isBluetoothConnected, setIsBluetoothConnected] = useState(() => {
-    return !!(window as any).printerCharacteristic;
-  });
+  // Printer configuration from global context
+  const {
+    printerType,
+    setPrinterType,
+    bluetoothDeviceName,
+    isBluetoothConnected,
+    pairBluetooth,
+    handleTestPrint
+  } = usePrinter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,108 +213,6 @@ export default function Admin() {
       }
     } catch (err: any) {
       alert(err.message || 'Error al guardar plato.');
-    }
-  };
-
-  const handlePairBluetooth = async () => {
-    try {
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
-      });
-
-      alert(`Conectando a ${device.name || 'Impresora'}...`);
-      const server = await device.gatt?.connect();
-      if (!server) throw new Error("No se pudo conectar al servidor GATT.");
-
-      const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
-
-      (window as any).printerDevice = device;
-      (window as any).printerCharacteristic = characteristic;
-
-      device.addEventListener('gattserverdisconnected', () => {
-        setIsBluetoothConnected(false);
-        (window as any).printerCharacteristic = null;
-        alert("¡Impresora Bluetooth desconectada!");
-      });
-
-      localStorage.setItem('el24_printer_name', device.name || 'JP-80H');
-      setBluetoothDeviceName(device.name || 'JP-80H');
-      setIsBluetoothConnected(true);
-      alert("¡Impresora vinculada y conectada con éxito!");
-    } catch (err: any) {
-      alert("Error al vincular: " + err.message);
-    }
-  };
-
-  const handleSavePrinterSettings = (type: string) => {
-    localStorage.setItem('el24_printer_type', type);
-    setPrinterType(type);
-    alert("Configuración de impresora guardada con éxito.");
-  };
-
-  const handleTestPrint = async () => {
-    if (printerType === 'bluetooth') {
-      const characteristic = (window as any).printerCharacteristic;
-      if (!characteristic) {
-        alert("La impresora Bluetooth no está conectada. Por favor vincula tu impresora.");
-        return;
-      }
-      try {
-        const encoder = new TextEncoder();
-        const bytes: number[] = [];
-        const write = (str: string) => {
-          const encoded = encoder.encode(str);
-          bytes.push(...Array.from(encoded));
-        };
-        const cmd = (arr: number[]) => {
-          bytes.push(...arr);
-        };
-
-        cmd([0x1B, 0x40]); // Init
-        cmd([0x1B, 0x61, 0x01]); // Center
-        cmd([0x1B, 0x21, 0x10]); // Medium bold text
-        cmd([0x1B, 0x45, 0x01]); // Bold on
-        write("RESTAURANT EL 24\n");
-        cmd([0x1B, 0x21, 0x00]); // Normal text
-        cmd([0x1B, 0x45, 0x00]); // Bold off
-        write("PRUEBA DE CONEXION DE IMPRESORA\n");
-        write("------------------------------------------------\n");
-        write("FECHA: " + new Date().toLocaleString() + "\n");
-        write("Impresora JP-80H 80mm configurada OK!\n\n\n\n\n");
-        cmd([0x1D, 0x56, 0x41, 0x00]); // Cut
-
-        const dataArray = new Uint8Array(bytes);
-        const chunkSize = 20;
-        for (let i = 0; i < dataArray.length; i += chunkSize) {
-          const chunk = dataArray.slice(i, i + chunkSize);
-          await characteristic.writeValue(chunk);
-        }
-        alert("¡Ticket de prueba enviado!");
-      } catch (err: any) {
-        alert("Error al imprimir prueba: " + err.message);
-      }
-    } else {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) return;
-      printWindow.document.write(`
-        <html>
-          <body style="font-family: monospace; width: 72mm; padding: 10px;">
-            <h2 style="text-align: center; margin-bottom: 2px;">RESTAURANT EL 24</h2>
-            <h3 style="text-align: center; margin-top: 2px;">PRUEBA DE IMPRESION</h3>
-            <p>Impresora configurada correctamente por Sistema / Red / USB.</p>
-            <p>Fecha: ${new Date().toLocaleString()}</p>
-            <script>
-              window.onload = function() {
-                window.print();
-                window.close();
-              }
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
     }
   };
 
@@ -488,7 +386,7 @@ export default function Admin() {
                 <label className="block text-slate-700 text-xs font-black uppercase tracking-wider mb-2.5">Tipo de Conexión</label>
                 <div className="grid grid-cols-2 gap-4">
                   <button
-                    onClick={() => handleSavePrinterSettings('system')}
+                    onClick={() => setPrinterType('system')}
                     className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
                       printerType === 'system'
                         ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm shadow-primary/5'
@@ -499,7 +397,7 @@ export default function Admin() {
                     <span className="text-xs">Sistema / Red / USB</span>
                   </button>
                   <button
-                    onClick={() => handleSavePrinterSettings('bluetooth')}
+                    onClick={() => setPrinterType('bluetooth')}
                     className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
                       printerType === 'bluetooth'
                         ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm shadow-primary/5'
@@ -539,7 +437,7 @@ export default function Admin() {
 
                   <div className="flex gap-3">
                     <button
-                      onClick={handlePairBluetooth}
+                      onClick={pairBluetooth}
                       className="flex-1 bg-gradient-to-tr from-primary to-rose-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98] border-0 cursor-pointer text-xs"
                     >
                       {bluetoothDeviceName ? 'Vincular Nuevamente' : 'Buscar y Vincular'}
