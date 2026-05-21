@@ -348,6 +348,19 @@ export const PrinterProvider = ({ children }: { children: ReactNode }) => {
     return true;
   };
 
+  const writeToCharacteristic = async (characteristic: any, data: Uint8Array) => {
+    try {
+      if (characteristic.writeValueWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(data);
+      } else {
+        await characteristic.writeValue(data);
+      }
+    } catch (e: any) {
+      console.warn("Retrying write command via fallback due to:", e.message);
+      await characteristic.writeValue(data);
+    }
+  };
+
   const printDirectBluetooth = async (cart: any[], total: number) => {
     const characteristic = (window as any).printerCharacteristic;
     if (!characteristic) {
@@ -428,7 +441,7 @@ export const PrinterProvider = ({ children }: { children: ReactNode }) => {
       const chunkSize = 20;
       for (let i = 0; i < dataArray.length; i += chunkSize) {
         const chunk = dataArray.slice(i, i + chunkSize);
-        await characteristic.writeValue(chunk);
+        await writeToCharacteristic(characteristic, chunk);
       }
       return true;
     } catch (err: any) {
@@ -485,7 +498,7 @@ export const PrinterProvider = ({ children }: { children: ReactNode }) => {
         const chunkSize = 20;
         for (let i = 0; i < dataArray.length; i += chunkSize) {
           const chunk = dataArray.slice(i, i + chunkSize);
-          await characteristic.writeValue(chunk);
+          await writeToCharacteristic(characteristic, chunk);
         }
         alert("¡Ticket de prueba enviado!");
       } catch (err: any) {
