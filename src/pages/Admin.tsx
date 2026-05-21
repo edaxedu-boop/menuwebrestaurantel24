@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenu } from '../context/MenuContext';
-import { ArrowLeft, Eye, EyeOff, Plus, Trash2, LogOut, Coffee, Tag, DollarSign, ChevronDown, ChevronUp, Edit } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Plus, Trash2, LogOut, Coffee, Tag, DollarSign, ChevronDown, ChevronUp, Edit, Printer } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://restaurantel24.duckdns.org/api';
 
@@ -47,7 +47,18 @@ export default function Admin() {
   };
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'categories' | 'products'>('products');
+  const [activeTab, setActiveTab] = useState<'categories' | 'products' | 'printer'>('products');
+
+  // Printer configuration states
+  const [printerType, setPrinterType] = useState(() => {
+    return localStorage.getItem('el24_printer_type') || 'system';
+  });
+  const [bluetoothDeviceName, setBluetoothDeviceName] = useState(() => {
+    return localStorage.getItem('el24_printer_name') || '';
+  });
+  const [isBluetoothConnected, setIsBluetoothConnected] = useState(() => {
+    return !!(window as any).printerCharacteristic;
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,6 +216,108 @@ export default function Admin() {
     }
   };
 
+  const handlePairBluetooth = async () => {
+    try {
+      const device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+      });
+
+      alert(`Conectando a ${device.name || 'Impresora'}...`);
+      const server = await device.gatt?.connect();
+      if (!server) throw new Error("No se pudo conectar al servidor GATT.");
+
+      const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+      const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+
+      (window as any).printerDevice = device;
+      (window as any).printerCharacteristic = characteristic;
+
+      device.addEventListener('gattserverdisconnected', () => {
+        setIsBluetoothConnected(false);
+        (window as any).printerCharacteristic = null;
+        alert("¡Impresora Bluetooth desconectada!");
+      });
+
+      localStorage.setItem('el24_printer_name', device.name || 'JP-80H');
+      setBluetoothDeviceName(device.name || 'JP-80H');
+      setIsBluetoothConnected(true);
+      alert("¡Impresora vinculada y conectada con éxito!");
+    } catch (err: any) {
+      alert("Error al vincular: " + err.message);
+    }
+  };
+
+  const handleSavePrinterSettings = (type: string) => {
+    localStorage.setItem('el24_printer_type', type);
+    setPrinterType(type);
+    alert("Configuración de impresora guardada con éxito.");
+  };
+
+  const handleTestPrint = async () => {
+    if (printerType === 'bluetooth') {
+      const characteristic = (window as any).printerCharacteristic;
+      if (!characteristic) {
+        alert("La impresora Bluetooth no está conectada. Por favor vincula tu impresora.");
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        const bytes: number[] = [];
+        const write = (str: string) => {
+          const encoded = encoder.encode(str);
+          bytes.push(...Array.from(encoded));
+        };
+        const cmd = (arr: number[]) => {
+          bytes.push(...arr);
+        };
+
+        cmd([0x1B, 0x40]); // Init
+        cmd([0x1B, 0x61, 0x01]); // Center
+        cmd([0x1B, 0x21, 0x10]); // Medium bold text
+        cmd([0x1B, 0x45, 0x01]); // Bold on
+        write("RESTAURANT EL 24\n");
+        cmd([0x1B, 0x21, 0x00]); // Normal text
+        cmd([0x1B, 0x45, 0x00]); // Bold off
+        write("PRUEBA DE CONEXION DE IMPRESORA\n");
+        write("------------------------------------------------\n");
+        write("FECHA: " + new Date().toLocaleString() + "\n");
+        write("Impresora JP-80H 80mm configurada OK!\n\n\n\n\n");
+        cmd([0x1D, 0x56, 0x41, 0x00]); // Cut
+
+        const dataArray = new Uint8Array(bytes);
+        const chunkSize = 20;
+        for (let i = 0; i < dataArray.length; i += chunkSize) {
+          const chunk = dataArray.slice(i, i + chunkSize);
+          await characteristic.writeValue(chunk);
+        }
+        alert("¡Ticket de prueba enviado!");
+      } catch (err: any) {
+        alert("Error al imprimir prueba: " + err.message);
+      }
+    } else {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+      printWindow.document.write(`
+        <html>
+          <body style="font-family: monospace; width: 72mm; padding: 10px;">
+            <h2 style="text-align: center; margin-bottom: 2px;">RESTAURANT EL 24</h2>
+            <h3 style="text-align: center; margin-top: 2px;">PRUEBA DE IMPRESION</h3>
+            <p>Impresora configurada correctamente por Sistema / Red / USB.</p>
+            <p>Fecha: ${new Date().toLocaleString()}</p>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.close();
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
@@ -321,10 +434,10 @@ export default function Admin() {
       {/* Main Content Container */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-10">
         {/* Navigation Tabs */}
-        <div className="flex bg-slate-200/80 p-1.5 rounded-2xl w-full max-w-md mx-auto mb-8 border border-slate-350/20 shadow-inner">
+        <div className="flex bg-slate-200/80 p-1.5 rounded-2xl w-full max-w-lg mx-auto mb-8 border border-slate-350/20 shadow-inner">
           <button
             onClick={() => setActiveTab('products')}
-            className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
               activeTab === 'products'
                 ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
                 : 'text-slate-555 hover:text-slate-800'
@@ -335,19 +448,119 @@ export default function Admin() {
           </button>
           <button
             onClick={() => setActiveTab('categories')}
-            className={`flex-1 flex items-center justify-center gap-2.5 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
               activeTab === 'categories'
                 ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
                 : 'text-slate-555 hover:text-slate-800'
             }`}
           >
             <Tag className="w-4 h-4" />
-            <span>Gestionar Categorías</span>
+            <span>Categorías</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('printer')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+              activeTab === 'printer'
+                ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                : 'text-slate-555 hover:text-slate-800'
+            }`}
+          >
+            <Printer className="w-4 h-4" />
+            <span>Impresora</span>
           </button>
         </div>
 
         {/* Tab contents */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {activeTab === 'printer' ? (
+          <div className="max-w-xl mx-auto w-full bg-white border border-slate-200 rounded-3xl p-8 shadow-xl shadow-slate-100/60 mt-4">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                <Printer className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Configuración de Impresora</h3>
+                <p className="text-slate-500 text-xs font-medium">JP-80H (Red / USB / Wi-Fi o Bluetooth Directo)</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-slate-700 text-xs font-black uppercase tracking-wider mb-2.5">Tipo de Conexión</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => handleSavePrinterSettings('system')}
+                    className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
+                      printerType === 'system'
+                        ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm shadow-primary/5'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600 font-semibold'
+                    }`}
+                  >
+                    <span className="block text-lg mb-1">🖥️ / 🔌</span>
+                    <span className="text-xs">Sistema / Red / USB</span>
+                  </button>
+                  <button
+                    onClick={() => handleSavePrinterSettings('bluetooth')}
+                    className={`p-4 rounded-2xl border text-center transition-all cursor-pointer ${
+                      printerType === 'bluetooth'
+                        ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm shadow-primary/5'
+                        : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600 font-semibold'
+                    }`}
+                  >
+                    <span className="block text-lg mb-1">🔵</span>
+                    <span className="text-xs">Bluetooth Directo</span>
+                  </button>
+                </div>
+                <p className="text-slate-450 text-[11px] font-medium leading-relaxed mt-2.5">
+                  * **Sistema/Red/USB**: Utiliza el controlador del sistema. Recomendado si la JP-80H está conectada por red ethernet/Wi-Fi (IP) o USB a una computadora.<br/>
+                  * **Bluetooth Directo**: Envía comandos directos ESC/POS desde el navegador usando Web Bluetooth.
+                </p>
+              </div>
+
+              {printerType === 'bluetooth' && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">Estado de Conexión Bluetooth</h4>
+                  
+                  <div className="flex items-center justify-between bg-white border border-slate-150 rounded-xl p-3.5">
+                    <div>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Dispositivo Vinculado</p>
+                      <p className="text-sm font-extrabold text-slate-800 mt-0.5">
+                        {bluetoothDeviceName || 'Ninguna impresora vinculada'}
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-full ${
+                      isBluetoothConnected
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        : 'bg-amber-50 text-amber-600 border border-amber-100'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${isBluetoothConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                      {isBluetoothConnected ? 'Conectado' : 'Desconectado'}
+                    </span>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handlePairBluetooth}
+                      className="flex-1 bg-gradient-to-tr from-primary to-rose-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98] border-0 cursor-pointer text-xs"
+                    >
+                      {bluetoothDeviceName ? 'Vincular Nuevamente' : 'Buscar y Vincular'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-5">
+                <button
+                  onClick={handleTestPrint}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl transition-all border-0 cursor-pointer text-xs flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Probar Impresión de Ticket</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* COLUMN 1: FORMS */}
           <div className="lg:col-span-1">
@@ -700,8 +913,8 @@ export default function Admin() {
               </div>
             )}
           </div>
-
         </div>
+      )}
       </main>
     </div>
   );

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Page, Navbar, Block, Button, Link } from 'konsta/react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Trash2, Plus, Minus, X, Printer, MessageCircle } from 'lucide-react';
+import { ChevronLeft, Trash2, Plus, Minus, Printer } from 'lucide-react';
 import { useCart } from '../context/CartContext.tsx';
 import BottomNav from '../components/BottomNav.tsx';
 
@@ -10,18 +10,11 @@ export default function Cart() {
   const navigate = useNavigate();
   const { cart, removeFromCart, total, clearCart, addToCart, updateQuantity } = useCart();
 
-  // Checkout Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [customerName, setCustomerName] = useState('');
-  const [printMethod, setPrintMethod] = useState<'normal' | 'bluetooth'>('normal');
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handleCheckout = () => {
-    setIsModalOpen(true);
-  };
-
-  const handlePrint = (name: string) => {
+  const handlePrint = () => {
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!printWindow) return false;
 
     const now = new Date();
     const dateStr = now.toLocaleDateString();
@@ -123,10 +116,6 @@ export default function Cart() {
           
           <div class="info-block">
             <div class="info-row">
-              <span class="info-label">CLIENTE:</span>
-              <span>${name.toUpperCase()}</span>
-            </div>
-            <div class="info-row">
               <span class="info-label">FECHA:</span>
               <span>${dateStr}</span>
             </div>
@@ -181,21 +170,17 @@ export default function Cart() {
       </html>
     `);
     printWindow.document.close();
+    return true;
   };
 
-  const printDirectBluetooth = async (name: string) => {
+  const printDirectBluetooth = async () => {
+    const characteristic = (window as any).printerCharacteristic;
+    if (!characteristic) {
+      alert("La impresora Bluetooth no está conectada. Por favor vincula tu impresora desde el Panel de Control.");
+      return false;
+    }
+
     try {
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
-      });
-
-      const server = await device.gatt?.connect();
-      if (!server) throw new Error("No se pudo conectar al servidor GATT.");
-
-      const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
-
       const encoder = new TextEncoder();
       const bytes: number[] = [];
       const write = (str: string) => {
@@ -220,7 +205,6 @@ export default function Cart() {
       write("------------------------------------------------\n"); // 48 columns
 
       cmd([0x1B, 0x61, 0x00]); // Left alignment
-      write(`CLIENTE: ${name.toUpperCase()}\n`);
       const now = new Date();
       const dateStr = now.toLocaleDateString();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -271,57 +255,46 @@ export default function Cart() {
         const chunk = dataArray.slice(i, i + chunkSize);
         await characteristic.writeValue(chunk);
       }
-
-      alert("¡Pedido impreso con éxito via Bluetooth!");
+      return true;
     } catch (err: any) {
       alert("Error al imprimir via Bluetooth: " + err.message);
+      return false;
     }
   };
 
-  const sendToWhatsApp = () => {
-    if (!customerName.trim()) {
-      alert("Por favor, ingresa tu nombre.");
-      return;
-    }
+  const handleCheckout = async () => {
+    const printerType = localStorage.getItem('el24_printer_type') || 'system';
 
-    const itemsText = cart
-      .map(item => `• ${item.quantity}x ${item.name} - S/ ${(item.price * item.quantity).toFixed(2)}`)
-      .join('\n');
-
-    const whatsappText = `*🍔 NUEVO PEDIDO - RESTAURANT EL 24 🍔*
----------------------------------------
-*Cliente:* ${customerName}
----------------------------------------
-*Detalle del Pedido:*
-${itemsText}
----------------------------------------
-*Total a Pagar:* *S/ ${total.toFixed(2)}*
-
-_¡Muchas gracias!_`;
-
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=51900900312&text=${encodeURIComponent(whatsappText)}`;
-    window.open(whatsappUrl, '_blank');
-    
-    clearCart();
-    setIsModalOpen(false);
-    navigate('/');
-  };
-
-  const printReceipt = async () => {
-    if (!customerName.trim()) {
-      alert("Por favor, ingresa tu nombre.");
-      return;
-    }
-
-    if (printMethod === 'bluetooth') {
-      await printDirectBluetooth(customerName);
+    if (printerType === 'bluetooth') {
+      const isConnected = !!(window as any).printerCharacteristic;
+      if (!isConnected) {
+        alert("La impresora Bluetooth no está conectada. Por favor ve al Panel de Control (Impresora) para vincularla.");
+        return;
+      }
+      setIsPrinting(true);
+      const success = await printDirectBluetooth();
+      if (success) {
+        setTimeout(() => {
+          clearCart();
+          setIsPrinting(false);
+          navigate('/');
+        }, 3000);
+      } else {
+        setIsPrinting(false);
+      }
     } else {
-      handlePrint(customerName);
+      setIsPrinting(true);
+      const success = handlePrint();
+      if (success) {
+        setTimeout(() => {
+          clearCart();
+          setIsPrinting(false);
+          navigate('/');
+        }, 3500);
+      } else {
+        setIsPrinting(false);
+      }
     }
-    
-    clearCart();
-    setIsModalOpen(false);
-    navigate('/');
   };
 
   return (
@@ -428,73 +401,18 @@ _¡Muchas gracias!_`;
         <BottomNav />
       </Page>
 
-      {/* Modal de Confirmación de Pedido */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
-          {/* Fondo clickeable para cerrar */}
-          <div className="absolute inset-0" onClick={() => setIsModalOpen(false)}></div>
-          
-          {/* Tarjeta del Modal */}
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto flex flex-col z-10 animate-slide-up">
-            {/* Encabezado */}
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-gray-900 tracking-tight">Confirmar Pedido</h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-gray-100 text-gray-500 hover:bg-gray-200 p-2 rounded-full border-0 cursor-pointer flex items-center justify-center transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Formulario */}
-            <div className="space-y-4 flex-grow mb-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5 text-left">Tu Nombre</label>
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Ingresa tu nombre"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 font-medium placeholder-gray-400 focus:outline-none focus:border-primary focus:bg-white transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5 text-left">Método de Impresión</label>
-                <div className="relative">
-                  <select
-                    value={printMethod}
-                    onChange={(e) => setPrintMethod(e.target.value as 'normal' | 'bluetooth')}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm text-gray-900 font-bold focus:outline-none focus:border-primary focus:bg-white transition appearance-none cursor-pointer"
-                  >
-                    <option value="normal">🖨️ Sistema (Red / USB / Wi-Fi / Bluetooth)</option>
-                    <option value="bluetooth">🔵 Bluetooth Directo ESC/POS (JP-80H)</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
-                    <ChevronLeft className="w-4 h-4 -rotate-90" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Botones de Acción */}
-            <div className="space-y-3">
-              <button
-                onClick={sendToWhatsApp}
-                className="w-full bg-[#25D366] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition border-0 cursor-pointer text-base shadow-md shadow-[#25D366]/20"
-              >
-                <MessageCircle className="w-5 h-5" />
-                Enviar a WhatsApp
-              </button>
-              <button
-                onClick={printReceipt}
-                className="w-full bg-gray-100 text-gray-800 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition border-0 cursor-pointer text-base shadow-sm hover:bg-gray-200"
-              >
-                <Printer className="w-5 h-5" />
-                Imprimir Pedido
-              </button>
-            </div>
+      {/* Pantalla de Impresión en curso */}
+      {isPrinting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md font-sans">
+          <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner mb-6 animate-pulse">
+            <Printer className="w-12 h-12" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Imprimiendo Pedido...</h2>
+          <p className="text-slate-500 font-extrabold text-base tracking-wide">¡Gracias por su pedido!</p>
+          <div className="mt-8 flex gap-1.5 justify-center">
+            <span className="w-2.5 h-2.5 bg-primary rounded-full animate-bounce delay-75"></span>
+            <span className="w-2.5 h-2.5 bg-primary/60 rounded-full animate-bounce delay-150"></span>
+            <span className="w-2.5 h-2.5 bg-primary/30 rounded-full animate-bounce delay-225"></span>
           </div>
         </div>
       )}
