@@ -34,17 +34,95 @@ export const PrinterProvider = ({ children }: { children: ReactNode }) => {
       if (!(navigator as any).bluetooth) {
         throw new Error("La API Web Bluetooth no está soportada o habilitada en este navegador.");
       }
+      
+      const commonServices = [
+        '0000ffe0-0000-1000-8000-00805f9b34fb',
+        '0000ae30-0000-1000-8000-00805f9b34fb',
+        '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+        'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+        '000018f0-0000-1000-8000-00805f9b34fb'
+      ];
+
       const device = await (navigator as any).bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+        optionalServices: commonServices
       });
 
       alert(`Conectando a ${device.name || 'Impresora'}...`);
       const server = await device.gatt?.connect();
       if (!server) throw new Error("No se pudo conectar al servidor GATT.");
 
-      const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+      let service = null;
+      let characteristic = null;
+      let connectedServiceUUID = '';
+      let connectedCharacteristicUUID = '';
+
+      const serviceMap = [
+        {
+          service: '0000ffe0-0000-1000-8000-00805f9b34fb',
+          characteristic: '0000ffe1-0000-1000-8000-00805f9b34fb'
+        },
+        {
+          service: '0000ae30-0000-1000-8000-00805f9b34fb',
+          characteristic: '0000ae01-0000-1000-8000-00805f9b34fb'
+        },
+        {
+          service: '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+          characteristic: '49535343-1e4d-4bd9-ba61-23c647249616'
+        },
+        {
+          service: 'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+          characteristic: 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'
+        },
+        {
+          service: '000018f0-0000-1000-8000-00805f9b34fb',
+          characteristic: '00002af1-0000-1000-8000-00805f9b34fb'
+        }
+      ];
+
+      for (const item of serviceMap) {
+        try {
+          console.log(`Intentando conectar al servicio: ${item.service}`);
+          service = await server.getPrimaryService(item.service);
+          characteristic = await service.getCharacteristic(item.characteristic);
+          if (characteristic) {
+            connectedServiceUUID = item.service;
+            connectedCharacteristicUUID = item.characteristic;
+            console.log(`¡Conectado con éxito al servicio ${item.service}!`);
+            break;
+          }
+        } catch (e) {
+          console.log(`Servicio ${item.service} no soportado.`);
+        }
+      }
+
+      if (!characteristic) {
+        // Descubrimiento genérico
+        try {
+          console.log("Intentando descubrir servicios de forma genérica...");
+          const services = await server.getPrimaryServices();
+          for (const s of services) {
+            const characteristics = await s.getCharacteristics();
+            for (const c of characteristics) {
+              if (c.properties.write || c.properties.writeWithoutResponse) {
+                service = s;
+                characteristic = c;
+                connectedServiceUUID = s.uuid;
+                connectedCharacteristicUUID = c.uuid;
+                console.log(`¡Servicio genérico encontrado! S: ${s.uuid}, C: ${c.uuid}`);
+                break;
+              }
+            }
+            if (characteristic) break;
+          }
+        } catch (e) {
+          console.warn("Fallo el descubrimiento genérico:", e);
+        }
+      }
+
+      if (!characteristic) {
+        throw new Error("No se encontró ningún canal de escritura ESC/POS compatible en esta impresora.");
+      }
 
       (window as any).printerDevice = device;
       (window as any).printerCharacteristic = characteristic;
@@ -56,6 +134,9 @@ export const PrinterProvider = ({ children }: { children: ReactNode }) => {
       });
 
       localStorage.setItem('el24_printer_name', device.name || 'JP-80H');
+      localStorage.setItem('el24_printer_service_uuid', connectedServiceUUID);
+      localStorage.setItem('el24_printer_characteristic_uuid', connectedCharacteristicUUID);
+      
       setBluetoothDeviceName(device.name || 'JP-80H');
       setIsBluetoothConnected(true);
       alert("¡Impresora vinculada y conectada con éxito!");
@@ -78,8 +159,12 @@ export const PrinterProvider = ({ children }: { children: ReactNode }) => {
           if (device) {
             console.log("Intentando reconectar automáticamente a:", device.name);
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-            const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+            
+            const serviceUuid = localStorage.getItem('el24_printer_service_uuid') || '0000ffe0-0000-1000-8000-00805f9b34fb';
+            const characteristicUuid = localStorage.getItem('el24_printer_characteristic_uuid') || '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+            const service = await server.getPrimaryService(serviceUuid);
+            const characteristic = await service.getCharacteristic(characteristicUuid);
             
             (window as any).printerDevice = device;
             (window as any).printerCharacteristic = characteristic;
