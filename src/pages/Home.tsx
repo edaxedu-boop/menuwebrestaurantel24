@@ -188,8 +188,7 @@ export default function Home() {
               {filteredItems.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => navigate(`/item/${item.id}`)}
-                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col active:scale-95 transition-transform cursor-pointer"
+                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col active:scale-[0.99] transition-transform"
                 >
                   <div className="w-full pt-[100%] relative bg-gray-100 overflow-hidden">
                     <img
@@ -204,12 +203,12 @@ export default function Home() {
                       <p className="text-xs text-gray-400 line-clamp-2">{item.description}</p>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-1.5">
-                      <span className="font-extrabold text-primary text-sm whitespace-nowrap">S/ {item.price.toFixed(2)}</span>
+                      <span className="font-black text-primary text-base whitespace-nowrap">S/ {item.price.toFixed(2)}</span>
                       <button
                         onClick={(e) => handleAddToCart(e, item)}
-                        className="bg-primary text-white text-[10px] font-black px-2.5 py-1.5 rounded-full flex items-center gap-1 hover:scale-[1.05] active:scale-95 transition-all shadow-sm cursor-pointer border-0 whitespace-nowrap flex-shrink-0"
+                        className="bg-primary text-white text-xs font-black px-4 py-2.5 rounded-full flex items-center gap-1.5 hover:scale-[1.05] active:scale-95 transition-all shadow-sm cursor-pointer border-0 whitespace-nowrap flex-shrink-0"
                       >
-                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <ShoppingCart className="w-4 h-4" />
                         <span>Añadir</span>
                       </button>
                     </div>
