@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { Page, Navbar, Block, Button, Link } from 'konsta/react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Minus, Plus } from 'lucide-react';
+import { ChevronLeft, Minus, Plus, Printer } from 'lucide-react';
 import { useMenu } from '../context/MenuContext.tsx';
-import { useCart } from '../context/CartContext.tsx';
+import { usePrinter } from '../context/PrinterContext.tsx';
 
 export default function ItemDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { addToCart } = useCart();
   const [quantity, setQuantity] = useState(1);
   const { menuItems } = useMenu();
+  const { printReceipt } = usePrinter();
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const item = menuItems.find((i) => i.id === id);
 
@@ -24,9 +25,13 @@ export default function ItemDetail() {
     );
   }
 
-  const handleAdd = () => {
-    addToCart(item, quantity);
-    navigate(-1);
+  const handleAdd = async () => {
+    setIsPrinting(true);
+    await printReceipt([{ ...item, quantity }], item.price * quantity);
+    setTimeout(() => {
+      setIsPrinting(false);
+      navigate(-1);
+    }, 2500);
   };
 
   return (
@@ -120,6 +125,22 @@ export default function ItemDetail() {
           </Button>
         </div>
       </Page>
+
+      {/* Pantalla de Impresión en curso */}
+      {isPrinting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md font-sans">
+          <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner mb-6 animate-pulse">
+            <Printer className="w-12 h-12" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Imprimiendo Pedido...</h2>
+          <p className="text-slate-500 font-extrabold text-base tracking-wide">¡Gracias por su pedido!</p>
+          <div className="mt-8 flex gap-1.5 justify-center">
+            <span className="w-2.5 h-2.5 bg-primary rounded-full animate-bounce delay-75"></span>
+            <span className="w-2.5 h-2.5 bg-primary/60 rounded-full animate-bounce delay-150"></span>
+            <span className="w-2.5 h-2.5 bg-primary/30 rounded-full animate-bounce delay-225"></span>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

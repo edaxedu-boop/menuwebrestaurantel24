@@ -50,6 +50,22 @@ export const MenuProvider = ({ children }: { children: ReactNode }) => {
     refreshMenu();
   }, []);
 
+  // Preload and cache all images in memory to make the app feel incredibly fast
+  useEffect(() => {
+    const urls = [
+      "https://storage.googleapis.com/glide-prod.appspot.com/uploads-v2/ASMXWoNF8X10q4sd36fh/pub/DJygTkLdmOw2UcPCFGlU.gif",
+      "https://storage.googleapis.com/glide-prod.appspot.com/uploads-v2/ASMXWoNF8X10q4sd36fh/pub/PaMOLGOaGKmyQKBsJBYo.png",
+      ...categories.map(c => c.image),
+      ...menuItems.map(i => i.image)
+    ];
+
+    urls.forEach(url => {
+      if (!url) return;
+      const img = new Image();
+      img.src = url;
+    });
+  }, [categories, menuItems]);
+
   const addCategory = async (name: string, image: string): Promise<boolean> => {
     try {
       const token = localStorage.getItem('el24_admin_token');

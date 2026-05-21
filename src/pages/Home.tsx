@@ -2,22 +2,29 @@ import React, { useState } from 'react';
 import { Page } from 'konsta/react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MessageCircle, ChevronLeft, ShoppingCart } from 'lucide-react';
+import { MessageCircle, ChevronLeft, ShoppingCart, Printer } from 'lucide-react';
 import { useMenu } from '../context/MenuContext.tsx';
 import BottomNav from '../components/BottomNav.tsx';
-import { useCart } from '../context/CartContext.tsx';
+import { usePrinter } from '../context/PrinterContext.tsx';
 
 export default function Home() {
   const { categories, menuItems } = useMenu();
   const [activeCategory, setActiveCategory] = useState('inicio');
   const navigate = useNavigate();
-  const { addToCart } = useCart();
+  const { printReceipt } = usePrinter();
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handleAddToCart = (e: React.MouseEvent, item: any) => {
+  const handleAddToCart = async (e: React.MouseEvent, item: any) => {
     e.stopPropagation();
-    addToCart(item, 1);
+    setIsPrinting(true);
+    
+    // Print this single product immediately
+    await printReceipt([{ ...item, quantity: 1 }], item.price);
+    
+    setTimeout(() => {
+      setIsPrinting(false);
+    }, 2500);
   };
-
 
   const filteredItems = menuItems.filter(item => item.category === activeCategory);
 
@@ -41,7 +48,18 @@ export default function Home() {
                 className="w-full h-full object-cover"
               />
               {/* Gradiente de sombra sobre la portada */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50"></div>
+              <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/65"></div>
+              
+              {/* Botón transparente para el Panel Admin */}
+              <button
+                onClick={() => navigate('/admin')}
+                className="absolute top-4 right-4 z-30 w-11 h-11 rounded-full bg-black/25 hover:bg-black/40 backdrop-blur-md text-white flex items-center justify-center transition-all cursor-pointer border-0 active:scale-95 shadow-sm"
+                title="Panel de Control"
+              >
+                <svg className="w-5.5 h-5.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                </svg>
+              </button>
             </div>
 
             {/* Información del Restaurante (Perfil e Info Centrados que traslapan) */}
@@ -155,7 +173,15 @@ export default function Home() {
               <h2 className="text-base font-extrabold text-gray-900 tracking-tight">
                 {categories.find(c => c.id === activeCategory)?.name}
               </h2>
-              <div className="w-16"></div> {/* Espaciador invisible para centrar el título */}
+              <button
+                onClick={() => navigate('/admin')}
+                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-250 text-slate-700 flex items-center justify-center transition-all cursor-pointer border-0 active:scale-95 shadow-sm"
+                title="Panel de Control"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                </svg>
+              </button>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-6xl mx-auto">
@@ -170,7 +196,6 @@ export default function Home() {
                       src={item.image}
                       alt={item.name}
                       className="absolute inset-0 w-full h-full object-cover"
-                      loading="lazy"
                     />
                   </div>
                   <div className="p-3 flex flex-col flex-grow justify-between">
@@ -197,6 +222,22 @@ export default function Home() {
 
         <BottomNav />
       </Page>
+
+      {/* Pantalla de Impresión en curso */}
+      {isPrinting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md font-sans animate-fade-in">
+          <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-inner mb-6 animate-pulse">
+            <Printer className="w-12 h-12" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Imprimiendo Pedido...</h2>
+          <p className="text-slate-500 font-extrabold text-base tracking-wide">¡Gracias por su pedido!</p>
+          <div className="mt-8 flex gap-1.5 justify-center">
+            <span className="w-2.5 h-2.5 bg-primary rounded-full animate-bounce delay-75"></span>
+            <span className="w-2.5 h-2.5 bg-primary/60 rounded-full animate-bounce delay-150"></span>
+            <span className="w-2.5 h-2.5 bg-primary/30 rounded-full animate-bounce delay-225"></span>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
